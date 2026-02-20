@@ -17,5 +17,5 @@ Imports:
     ggplot2,    
     xml2,
     rvest,
-    stringr
-    
+    stringr,
+    htmltools
