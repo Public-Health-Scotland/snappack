@@ -3,3 +3,8 @@
 export(geom_funnel_lines)
 export(scale_funnel_phs)
 export(stat_funnel_lines)
+export(use_word_html_links)
+export(word_html_check)
+export(word_html_insert_link)
+export(word_html_remove_markup)
+export(word_html_split)

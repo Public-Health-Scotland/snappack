@@ -3,7 +3,7 @@ Title: Functions and templates for the Scottish National Audit Programme
 Version: 0.0.0.9000
 Authors@R: 
     person("Dylan", "Lewis", , "dylan.lewis@phs.scot", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+Description: Various utility functions for use in the Scottish National Audit Programme.
 License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
     license
 Encoding: UTF-8
@@ -14,5 +14,8 @@ BugReports: https://github.com/Public-Health-Scotland/snappack/issues
 Imports: 
     dplyr,
     forcats,
-    ggplot2
-    
+    ggplot2,    
+    xml2,
+    rvest,
+    stringr,
+    htmltools
