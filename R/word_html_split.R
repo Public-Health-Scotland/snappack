@@ -39,8 +39,8 @@ word_html_split <- function(
     stop(sprintf("No <%s> tags found in document", heading_tag))
   }
 
-  # All siblings of the first heading
-  body_nodes <- xml2::xml_siblings(headings[[1]])
+  # All nodes at same level as the first heading
+  body_nodes <- xml2::xml_children(xml2::xml_parent(headings[[1]]))
 
   # Locate heading positions
   heading_positions <- which(rvest::html_name(body_nodes) == heading_tag)
