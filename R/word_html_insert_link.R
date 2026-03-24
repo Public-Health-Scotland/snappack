@@ -1,24 +1,36 @@
-#' Insert HTML links into elements of a Word-exported HTML document
+#' Insert HTML links into elements of a Word‑exported HTML document
 #'
-#' This function wraps selected HTML nodes in an <a> tag with a generic
-#' CSS class (default: "word-html-link") so that JavaScript can detect
-#' click events and optionally forward them to Shiny.
+#' This function inserts clickable HTML links in one of two ways:
 #'
-#' @param html A file path, character string containing HTML, or a
-#'   parsed xml_document.
-#' @param pattern Optional. A regex pattern to match against the text
-#'   content of each target node. If NULL, all matching nodes are wrapped.
-#' @param link_value Optional value to store in a `data-link` attribute
-#'   on the generated <a> tag. If NULL, the node's text content is used.
-#' @param selector A CSS selector used to locate candidate elements.
-#'   Defaults to "span.Crossreference".
-#' @param class CSS class to assign to generated links. Defaults to
-#'   "word-html-link". Provided JS event handler requires links to be of
-#'   this class. See \code{use_word_html_links()}.
+#' **1. XML mode (default):**
+#' If a CSS `selector` is provided (the default), matching elements in the
+#' parsed HTML document are wrapped in `<a>` tags.
+#' If no elements match the selector, the function performs no linking and
+#' returns the document unchanged.
 #'
-#' @return A modified xml_document with matching elements wrapped in
-#'   <a> tags. Does not write to disk.
+#' **2. Text‑replacement mode:**
+#' If `selector = NULL`, the function does not look for HTML nodes. Instead,
+#' any substring matched by `pattern` is replaced directly in the HTML using
+#' `<a>` tags.
+#' This mode allows linking arbitrary text fragments within HTML elements.
 #'
+#' @param html A file path, character string containing HTML, or an
+#'   xml_document object.
+#' @param pattern Optional. A regex pattern used to identify text to wrap in a
+#'   link. If NULL, all nodes matching the selector are linked.
+#' @param link_value Optional value stored in the `data-link` attribute. If
+#'   NULL, the matched text (in text‑mode) or node text (in XML‑mode) is used.
+#' @param selector CSS selector for locating candidate elements.
+#'   Set to `NULL` to enable text‑replacement mode. Defaults to
+#'   `"span.Crossreference"`.
+#' @param class CSS class assigned to the generated `<a>` tag.
+#'   Defaults to `"word-html-link"`.
+#' @param href The `href` attribute to apply to generated `<a>` tags.
+#'   Defaults to `"#"`. May be set to any URL or internal reference.
+#'
+#' @return An xml_document with modified content. Does not write to disk.
+#'
+
 #' @examples
 #' \dontrun{
 #' # Example: Using word_html_insert_link() inside a Shiny navbarPage app
@@ -59,7 +71,7 @@
 #'   observeEvent(input$word_html_link, {
 #'     print(input$word_html_link)
 #'     # Switch the navbarPage to the panel indicated by link_value
-#'     updateNavbarPage(session, inputId = "navbar",
+#'     updateNavbarPage(inputId = "navbar",
 #'                      selected = input$word_html_link)
 #'   })
 #' }
@@ -67,12 +79,14 @@
 #' shinyApp(ui, server)
 #' }
 #' @export
+
 word_html_insert_link <- function(
     html,
     pattern    = NULL,
     link_value = NULL,
     selector   = "span.Crossreference",
-    class      = "word-html-link"
+    class      = "word-html-link",
+    href       = "#"
 ) {
 
   # ---- Parse input ----------------------------------------------------------
@@ -84,44 +98,71 @@ word_html_insert_link <- function(
     html  # assume xml_document
   }
 
-  # ---- Find target nodes ----------------------------------------------------
-  nodes <- rvest::html_elements(doc, selector)
 
-  if (length(nodes) == 0) {
-    warning(sprintf("No elements found for selector '%s'", selector))
+  # ---- MODE 1: XML MODE (selector provided) ---------------------------------
+  if (!is.null(selector)) {
+
+    nodes <- rvest::html_elements(doc, selector)
+
+    if (length(nodes) == 0) {
+      message(sprintf("No elements matched selector '%s'. No links inserted.", selector))
+      return(doc)
+    }
+
+    for (node in nodes) {
+
+      # Skip if node already contains <a>
+      if (length(rvest::html_elements(node, "a")) > 0) next
+
+      txt <- xml2::xml_text(node)
+
+      # Optional pattern filter
+      if (!is.null(pattern) && !stringr::str_detect(txt, pattern)) next
+
+      # Determine link value
+      value <- if (!is.null(link_value)) link_value else stringr::str_squish(txt)
+
+      # Capture children
+      original_children <- xml2::xml_contents(node)
+
+      # Replace node with <a>
+      a <- xml2::xml_replace(
+        node,
+        "a",
+        href = href,
+        class = class,
+        `data-link` = value
+      )
+
+      # Re‑attach children
+      lapply(original_children, function(x) xml2::xml_add_child(a, x))
+    }
+
     return(doc)
   }
 
-  # ---- Wrap matching nodes in <a> tags -------------------------------------
-  for (node in nodes) {
-
-    # Skip if already wrapped
-    if (length(rvest::html_elements(node, "a")) > 0) next
-
-    # Extract text
-    txt <- xml2::xml_text(node)
-
-    # Optional pattern filter
-    if (!is.null(pattern) && !stringr::str_detect(txt, pattern)) next
-
-    # Determine link value
-    value <- if (!is.null(link_value)) link_value else stringr::str_squish(txt)
-
-    # Capture original content
-    original_children <- xml2::xml_contents(node)
-
-    # Create <a> containing the node's content
-    a <- xml2::xml_replace(
-      node,
-      "a",
-      href = "#",
-      class = class,
-      `data-link` = value
-    )
-
-    lapply(original_children, function(x) xml2::xml_add_child(a, x))
-
+  # ---- MODE 2: TEXT‑REPLACEMENT MODE (selector = NULL) ----------------------
+  if (is.null(pattern)) {
+    stop("Text‑replacement mode requires a non‑NULL 'pattern'.")
   }
 
-  doc
+  html_str <- as.character(doc)
+
+  new_str <- stringr::str_replace_all(
+    html_str,
+    pattern,
+    function(x) {
+      paste0(
+        "<a href='", href, "' class='", class,
+        "' data-link='",
+        if (is.null(link_value)) x else link_value,
+        "'>",
+        x,
+        "</a>"
+      )
+    }
+  )
+
+  xml2::read_html(new_str)
+
 }
