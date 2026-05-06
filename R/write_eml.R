@@ -19,6 +19,8 @@ write_eml <- function(
     body_html,
     attach_files = NULL,
     output_file,
+    apply_label = FALSE,
+    sensitivity = c("Personal", "OFFICIAL", "OFFICIAL_SENSITIVE_VMO"),
     quietly = FALSE
 ) {
 
@@ -42,7 +44,53 @@ write_eml <- function(
     stop("Incompatible extension in output filename (must be .eml)", call. = FALSE)
   }
 
+  sensitivity <- match.arg(sensitivity)
+
+  ## ---- build message components -----------------------------------------
+
   boundary <- paste0("----=_R_", sample(1e8, 1))
+
+
+  sensitivity_headers <- character()
+
+  if (isTRUE(apply_label)) {
+
+    xml <- phstemplates:::sensitivity_label_xml[[sensitivity]]
+
+    if (is.null(xml)) {
+      stop("Unknown sensitivity label: ", sensitivity, call. = FALSE)
+    }
+
+    mip <- .extract_mip_label_from_xml(xml)
+
+    set_date <- format(
+      as.POSIXct(Sys.time(), tz = "UTC"),
+      "%Y-%m-%dT%H:%M:%OS3Z"
+    )
+
+    msip_parts <- c(
+      paste0("MSIP_Label_", mip$guid, "_Enabled=True"),
+      paste0("MSIP_Label_", mip$guid, "_SiteId=", mip$tenant_id),
+      paste0("MSIP_Label_", mip$guid, "_SetDate=", set_date),
+      paste0("MSIP_Label_", mip$guid, "_Name=", sensitivity),
+      paste0("MSIP_Label_", mip$guid, "_ContentBits=", mip$contentBits),
+      paste0("MSIP_Label_", mip$guid, "_Method=", mip$method)
+    )
+
+    sensitivity_headers <- c(
+      paste0(
+        "X-MS-Exchange-Organization-ModifySensitivityLabel: ",
+        "00000000-0000-0000-0000-000000000000;",
+        mip$guid
+      ),
+      paste0(
+        "msip_labels: ",
+        paste(msip_parts, collapse = ";"),
+        ";"
+      )
+    )
+  }
+
 
   headers <- c(
     "X-Unsent: 1",
@@ -52,6 +100,7 @@ write_eml <- function(
     paste0("Subject: ", subject),
     paste0("Date: ", format(Sys.time(), "%a, %d %b %Y %H:%M:%S %z")),
     "MIME-Version: 1.0",
+    sensitivity_headers,
     paste0("Content-Type: multipart/mixed; boundary=\"", boundary, "\""),
     ""
   )
@@ -154,4 +203,31 @@ write_eml <- function(
   }
 
   invisible(NULL)
+}
+
+#' Internal helper for getting sensitivity labels from phstemplates
+#'
+#' @param xml_string should be phstemplates:::sensitivity_label_xml
+#'
+#' @returns list of label components
+#' @keywords internal
+#' @noRd
+.extract_mip_label_from_xml <- function(xml_string) {
+
+  attrs <- regmatches(
+    xml_string,
+    gregexpr('(?<=\\s)[a-zA-Z]+="[^"]+"', xml_string, perl = TRUE)
+  )[[1]]
+
+  kv <- setNames(
+    sub('^[^=]+="', "", sub('"$', "", attrs)),
+    sub('=".*$', "", attrs)
+  )
+
+  list(
+    guid        = gsub("[{}]", "", kv[["id"]]),
+    tenant_id  = gsub("[{}]", "", kv[["siteId"]]),
+    contentBits = kv[["contentBits"]],
+    method     = kv[["method"]]
+  )
 }
