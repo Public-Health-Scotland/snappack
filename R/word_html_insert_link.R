@@ -71,7 +71,7 @@
 #'   observeEvent(input$word_html_link, {
 #'     print(input$word_html_link)
 #'     # Switch the navbarPage to the panel indicated by link_value
-#'     updateNavbarPage(inputId = "navbar",
+#'     updateNavbarPage(session, inputId = "navbar",
 #'                      selected = input$word_html_link)
 #'   })
 #' }
@@ -153,10 +153,14 @@ word_html_insert_link <- function(
     pattern,
     function(x) {
       paste0(
-        "<a href='", href, "' class='", class,
-        "' data-link='",
-        if (is.null(link_value)) x else link_value,
-        "'>",
+        "<a href=\"", htmltools::htmlEscape(href, attribute = TRUE),
+        "\" class=\"", htmltools::htmlEscape(class, attribute = TRUE),
+        "\" data-link=\"",
+        htmltools::htmlEscape(
+          if (is.null(link_value)) x else link_value,
+          attribute = TRUE
+        ),
+        "\">",
         x,
         "</a>"
       )
