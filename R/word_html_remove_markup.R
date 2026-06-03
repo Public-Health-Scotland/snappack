@@ -23,6 +23,12 @@ word_html_remove_markup <- function(input_html) {
     xml2::read_html(input_html)
   }
 
+  # Remove comment containers
+  comment_containers <-  xml2::xml_find_all(doc, "//*[@class='MsoCommentReference']")
+  if (length(comment_containers) > 0) {
+    xml2::xml_remove(comment_containers)
+  }
+
   # Remove comment anchors
   comments <- xml2::xml_find_all(doc, "//*[@class='msocomanchor']")
   if (length(comments) > 0) {
@@ -36,19 +42,14 @@ word_html_remove_markup <- function(input_html) {
   }
 
   # Unwrap inserted text (keep contents but drop the wrapper)
-  insertions <- xml2::xml_find_all(doc, "//*[@class='msoIns']")
+  insertions <-  xml2::xml_find_all(doc, "//*[@class='msoIns']")
 
-  if (length(insertions) > 0) {
-    # Reverse order prevents altering node indexing
-    for (i in rev(seq_along(insertions))) {
-      node <- insertions[[i]]
+  for(i in rev(seq_along(insertions))){
 
-      contents <- xml2::xml_contents(node)
-      if (length(contents) > 0) {
-        xml2::xml_add_sibling(node, contents)
-      }
-      xml2::xml_remove(node)
-    }
+    xml2::xml_add_sibling(insertions[i],
+                          xml2::xml_contents(xml2::xml_child(insertions[i])))
+
+    xml2::xml_remove(insertions[i])
   }
 
   return(doc)

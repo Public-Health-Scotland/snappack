@@ -81,7 +81,13 @@ word_html_split <- function(
       xml2::write_html(out_doc, file_path)
 
     } else {
-      writeLines(as.character(section_nodes), file_path)
+      html_out <- as.character(section_nodes)
+
+      # Fix xml2's conversion of &nbsp; → U+00A0
+      html_out <- gsub("\u00A0", "&nbsp;", html_out, fixed = TRUE)
+
+      writeLines(html_out, file_path)
+
     }
   }
 
